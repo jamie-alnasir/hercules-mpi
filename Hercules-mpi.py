@@ -9,7 +9,7 @@
 #//==============================================================================
 
 # Hercules-mpi: MPI implementation of Hercules transcriptomics analysis
-# Jamie Alnasir
+# Dr. Jamie Alnasir
 #
 # Copyright (c) 2018, Dr. Jamie Alnasir, all rights reserved
 #
@@ -73,7 +73,7 @@ def enum(*sequential, **named):
 tags = enum('PING', 'WORK', 'INITIALISE', 'UNLOADGTF', 'RETIRE', 'SYNC', 'SERIALISED');
 
 # Hercules work tags
-tasks = enum('GTFSAM', 'GTFSAMCOMBINE', 'MOTIFMAP', 'MOTIFMAPCOMBINE', 'MOTIFREDUCE', 'MOTIFREDUCECOMBINE');
+tasks = enum('GTFSAM', 'GTFSAMCOMBINE', 'MOTIFMAP', 'MOTIFMAPCOMBINE', 'MOTIFREDUCE', 'MOTIFREDUCECOMBINE', 'GCMAP', 'GCMAPCOMBINE');
 
 
 lstReceived = [];
@@ -331,6 +331,31 @@ def combineMotifReduce(aMotif):
 		os.popen("rm " + motifreduceFile);
 
 
+
+def allocWorkSAMGC(rankChunkIndex):
+# send out GC computation work to nodes
+# rankChunkIndex is the GTF-SAM.?.dat file where the index corresponds to the rank that generated the file
+	
+	wrkFileSAM = CONF_LFS_WORKING_ + "GTF-SAM." + str(rankChunkIndex) + ".dat";
+	pprint("Loading partitioned SAM reads for GC Computation (this may take some time): ".format(wrkFileSAM));
+
+	for i in range(1, size):
+		sendWork(i, tasks.GCMAP, rankChunkIndex);
+
+def combineGCMap():
+# aggregate work from GTFSAM step
+
+	# remove any previous result	
+	pprint("attempting to remove any previous result: GC.final.dat");
+	GCDataFile = CONF_LFS_WORKING_ + "GC.final.dat";
+	os.popen("rm " + GCDataFile);
+
+	# old method, non serialised
+	#for i in range(1, size):
+	#	sendWork(i, tasks.GTFSAMCOMBINE, []);
+
+	serialiseWork(tasks.GCMAPCOMBINE, []);
+
 #//------------------------------------------------------------------------------
 # Hercules RNA-Seq analysis functions
 #//------------------------------------------------------------------------------
@@ -574,6 +599,58 @@ def reduceTupleList(lstT, bPreSort):
 		lstR.append(key + "," + str(sum([x[1] for x in group])));
 	return lstR; #[i.replace("_",",") for i in lstR];
 
+def gc_mapper(aReadLine):
+	# GC_MAP Map step
+	# Return the GC content of the given read
+	key, value = aReadLine.strip('\'').split(',');
+	key = key.strip('(');
+	value = value.rstrip(')\n');
+	sam_data = value.split('\t');
+	gc = GC_Content(sam_data[9]);
+	return ",".join([str(key), str(gc)]);
+
+
+def computeGCsums(lstGCchunk):
+# Return a list of sums and counts for aggregation and averaging later
+    lstResult = [];
+    lstGC = [];
+    for i in lstGCchunk:
+        exon, GC = i.strip().split(",");
+        GC = float(GC);
+        lstGC.append([exon, GC]);
+    lstGC = sorted(lstGC, key=lambda x: x[0], reverse=False);
+    for key, group in groupby(lstGC, lambda x: x[0]):
+        sum = 0.0;
+        count = 0;
+        for i in group:
+            #print i[1];
+            sum = sum + float(i[1]);
+            count += 1;
+        lstResult.append(",".join([str(key), str(count), str(sum)]));
+    return lstResult;
+
+
+def computeFinalGCcontent(strFinalDatFile):
+# Aggregate all GC sums and counts into final mean GC for each exon
+	lstResult = [];
+	lstTmp    = loadText(strFinalDatFile);
+	lstGCsums = [];
+	for i in lstTmp:
+		Exon, Count, Sum = i.strip().split(",");
+		lstGCsums.append([long(Exon), long(Count), float(Sum)]);
+		
+	lstGCsorted = sorted(lstGCsums, key=lambda x: x[0], reverse=False);
+	for key, group in groupby(lstGCsorted, lambda x: x[0]):
+		GCsum = 0.0;
+		CountSum = 0;
+		for i in group:
+			CountSum = CountSum + i[1];
+			GCsum = GCsum + float(i[2]);
+		lstResult.append(",".join( [str(key).rjust(20, '0'), str( float( GCsum / CountSum ) ) ] ));
+	lstResult[0] = lstResult[0].replace("000000000000000000-1","-1"); # Kludge needed due to rjust
+	return lstResult;
+
+
 #//------------------------------------------------------------------------------
 # ALL Process initialisation
 #//------------------------------------------------------------------------------
@@ -630,7 +707,7 @@ if rank == 0:
 		
 	gtfsamFile = CONF_LFS_WORKING_ + "GTF-SAM.final.dat";
 	
-	# If GTF-SAM fie exists, don't perform the GTF-SAM map step
+	# If GTF-SAM file exists, don't perform the GTF-SAM map step
 	# NB: to allow kick-off from after GTF-SAM map step
 	if not os.path.exists(gtfsamFile):
 
@@ -671,6 +748,21 @@ if rank == 0:
 					combineMotifReduce(fourmer); # SERIALISED
 
 					# combineWorkReduce() is serialised so will have already waited for all workers to complete
+
+
+	# Perform GC content computation	
+	for i in range(1, size):
+		allocWorkSAMGC(i);
+
+	# Aggregate GC content computations
+	GCDatFile = CONF_LFS_WORKING_ + "GC.final.dat";
+	finalGCcsv = CONF_LFS_WORKING_ + "GC-content.csv";
+
+	combineGCMap(); # SERIALISED
+
+	lstGCFinal = computeFinalGCcontent(GCDatFile);
+	saveText(finalGCcsv, lstGCFinal);
+	
 
 	# retire nodes
 	for i in range(1, size):
@@ -760,11 +852,12 @@ if rank <> 0:
 			#print "work instructions = ", data;
 
 			wrkFile = CONF_LFS_WORKING_ + "GTF-SAM." + str(rank) + ".dat";
+			wrkFileGC = CONF_LFS_WORKING_ + "GC." + str(rank) + ".dat";
 			
 			if (data[0] == tasks.GTFSAM):
 				lstWrkResult = [];
 				workParams = data[1];
-				pprint("performing GTF-SAM partitioning on chunk of reads: {}".format(workParams));
+				pprint("performing GTF-SAM partitioning on read chunk #: {}".format(workParams));
 				workChunk = readlinesFileSection(CONF_LFS_SAM_READS_, workParams[0], workParams[1] - 1);
 
 				for x in range(0, len(workChunk)):
@@ -916,8 +1009,44 @@ if rank <> 0:
 
 				sendSerialised();
 
+			if (data[0] == tasks.GCMAP):
+				lstWrkTmp = [];
+				lstWrkResult = [];
+				workParams = data[1];
+				pprint("Computing mean exon GC content for chunk of reads: {}".format(workParams));
+				workChunk = loadText(wrkFile);
+
+				for c in workChunk:
+					lstWrkTmp.append(gc_mapper(c));
 				
+				# Compute intermediate GC results
+				lstWrkResult = computeGCsums(lstWrkTmp);
+
+				pprint("100% completed. job done.");				
+				saveText(wrkFileGC, lstWrkResult);
+				del lstWrkTmp, lstWrkResult;
 				
+				syncMaster();
+			
+			if (data[0] == tasks.GCMAPCOMBINE):
+				lstWrkResult = [];
+				pprint("aggregating GC MAP data");
+				pprint("input chunk: {}".format(wrkFileGC));
+
+				GCDataFile = CONF_LFS_WORKING_ + "GC.final.dat";
+				if os.path.exists(wrkFileGC):
+					
+					os.popen("cat " + wrkFileGC + " >>" + GCDataFile);
+					pprint("written GC map step file: {}".format(GCDataFile));
+
+					#if CONF_REMOVE_INTERMEDIATES_:
+					#	os.popen("rm " + wrkFileGC);
+
+				else:
+					pprint("error, input file doesn't exist {}".format(wrkFile));
+
+				sendSerialised();
+
 		if (tag == tags.RETIRE):
 			pprint("recieved the command to retire!")
 			bWorkerRetired = True;
