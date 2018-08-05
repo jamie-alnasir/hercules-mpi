@@ -915,7 +915,7 @@ if rank == 0:
 	lstAllGCcorrels = [];
 	for i in range(0, 256):
 		fourmer = lstMotifs[i];
-		fourmerCorrelFileGC = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".gc.correl";
+		fourmerCorrelFileGC = CONF_LFS_WORKING_ + fourmer + ".gc.correl";
 
 		lstFourmerGCcorrel = loadObject(fourmerCorrelFileGC);
 		lstAllGCcorrels.extend(lstFourmerGCcorrel);
@@ -1016,7 +1016,7 @@ if rank <> 0:
 					fourmerFile = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".csv";
 					fourmerQ1File = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".q1";
 					fourmerCorrelFile = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".correl";
-					fourmerCorrelFileGC = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".gc.correl";
+					fourmerCorrelFileGC = CONF_LFS_WORKING_ + fourmer + ".gc.correl";
 
 
 					# Load 1st Quartile (Q1) from file
