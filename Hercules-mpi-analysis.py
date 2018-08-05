@@ -8,7 +8,7 @@
 #//
 #//==============================================================================
 # Hercules-mpi: MPI implementation of Hercules transcriptomics analysis
-# Jamie Alnasir
+# Dr. Jamie Alnasir
 #
 # Copyright (c) 2018, Dr. Jamie Alnasir, all rights reserved
 #
@@ -22,6 +22,9 @@
 # Alnasir, J., & Shanahan, H. (2017). A novel method to detect bias in Short Read NGS RNA-seq data. Journal of Integrative Bioinformatics, 14(3). [ Read ]
 #
 # Alnasir, J., & Shanahan, H. P. (2015). Transcriptomics on Spark Workshop - Introducing Hercules - an Apache Spark MapReduce algorithm for quantifying non-uniform gene expression. CloudTech'16, Marrakech, Morocco. [ Read]
+
+
+# ** BEFORE RUNNING: MUST EDIT HerculesConf with configration **
 
 
 #//------------------------------------------------------------------------------
@@ -83,7 +86,14 @@ _STR_DATE_TIME_		    = datetime.date.today().strftime("%B %d, %Y");
 # Nucleotide bases
 bases = "ATGC";
 
+# For exon reads median GC content lookup
+dictGC = {};
+
+# Enable for Filtering reads/counts based on exon % GC content
 _GC_FILTERING_ = False;
+_GC_FILTER_MIN_ = 60;
+_GC_FILTER_MAX_ = 70;
+
 FIRST_QUARTILE = 0;
 _MIN_CORRELATION_COUNTS_ = 10; 		# NORMALLY 10
 FIRST_QUARTILE; 			# Used later, for each motif.
@@ -98,7 +108,7 @@ def enum(*sequential, **named):
 	return type('Enum', (), enums)
 
 # Define MPI message tags
-tags = enum('PING', 'WORK', 'INITIALISE', 'UNLOADGTF', 'RETIRE', 'SYNC', 'SERIALISED');
+tags = enum('PING', 'WORK', 'INITIALISE', 'RETIRE', 'SYNC', 'SERIALISED');
 
 # Hercules work tags
 tasks = enum('Q1', 'MOTIFCORREL', 'PEARSONTABLE1', 'PEARSONTABLE2', 'BOXPLOT');
@@ -517,6 +527,89 @@ def getMotifDictAsFlatArray():
 		lstResult.append(item);
 	return lstResult;
 
+
+
+def filterByGC(exon_motif_reads, minGC, maxGC):
+# Filter exon counts by their GC content
+	lstWorking = [];
+	for item in exon_motif_reads:
+		lstWorking.append([item[0], item[1], item[2]]);
+ 
+	#print len(lstWorking), minGC, maxGC;
+		 
+	# return only exon counts for exons with median GC content within minGC and maxGC
+	lstR =  filter(lambda x: (GC_Lookup(x[0]) >= minGC and GC_Lookup(x[0]) < maxGC), lstWorking);
+	#print len(lstR);
+	return lstR;
+
+
+def LoadGC(gc_file):
+	global dictGC;
+	fr = open(gc_file, 'r');
+	lstGC = fr.read().splitlines();
+	for i in lstGC:
+		exon, gc_str = i.split(',');
+		dictGC[exon] = float(gc_str);
+
+def GC_Lookup(exonIDStr):
+	return dictGC[exonIDStr];
+
+def rawCorrelStatData(motif, motifFile, bPrint):
+# Return array of simple tuples for motif for Mean ExonGC, MotifGC, Spacing, R-value
+# There will be 4 tuples in the result, one for each spacing.
+
+	global _GC_FILTERING_;
+	global _GC_FILTER_MIN_, _GC_FILTER_MAX_; # to be writable to set filter range
+
+	# We'll be cycling the filter range for the computations
+	_GC_FILTERING_=True;
+
+	# GC content bins
+	lstREAD_GC_bins  = [[30,40], [40,50], [50,60], [60,70]];
+
+	lstRawCorrelData = [];
+
+
+	dictRval = {10:0, 50:0, 100:0, 200:0}
+	for spacing in [10,50,100,200]:
+	
+		if spacing in [10,50]:
+			tol = 2;
+		else:
+			tol = 4;
+
+		# filter by mean GC content of the exon reads
+		for gc_range in lstREAD_GC_bins:
+
+			_GC_FILTER_MIN_ = gc_range[0];
+			_GC_FILTER_MAX_ = gc_range[1];
+
+			bin_index_exon_gc = gc_range[0];
+			#print "Filtering for Median Exon GC content range: ", gc_range[0], '-', gc_range[1];
+			MeanExonGC = (float(gc_range[1] - gc_range[0]) / 2) + gc_range[0];
+
+			# n-spaced n-mers by exon
+			#print "Mean GC=", MeanExonGC, " Motif GC=", GC_Content(motif), " spacing=", spacing;
+			lstMotifs = _motifsBySpace(motifFile, spacing, tol); # NB filtered by Read/Exon GC
+	
+			lstCounts1 = getCol(lstMotifs, 2);
+			lstCounts2 = getCol(lstMotifs, 5);
+
+			if len(lstCounts1) >= _MIN_CORRELATION_COUNTS_: # we need at least this many pairs to compute correlation
+				
+				# Test 29/03/2017 -- use real average exon GC instead of middle of bin
+				#meanExonGC = meanGC(getCol(lstMotifs, 0))
+				#print "meanGC = ", meanExonGC;
+
+				
+				Rvalue = _safeCalcCorrelStat(lstCounts1, lstCounts1, lstCounts2);
+				lstRawCorrelData.append([MeanExonGC, GC_Content(motif), spacing, Rvalue]);
+				#lstRawCorrelData.append([meanExonGC, GC_Content(motif), spacing, Rvalue]);
+
+	
+	
+	return lstRawCorrelData;
+
 def printCorrelStat():
 
 	OutlierCount = 10;
@@ -774,8 +867,8 @@ else:
     else:
         _STR_CORREL_ = "Pearson Correlation";
 
-
-
+# Load Exon GC dictionary
+LoadGC("/home/infotech/jalnasir/Data/Drosophila/_working/GC-content.csv");
 
 #//------------------------------------------------------------------------------
 # MASTER process
@@ -788,6 +881,10 @@ if rank == 0:
 	print "SAM path: {}".format(CONF_LFS_SAM_READS_);
 	print "Working folder: {}".format(CONF_LFS_WORKING_);
 	print "Report Output folder: {}".format(CONF_LFS_OUT_);
+
+	#LoadGC("/home/infotech/jalnasir/Data/Drosophila/_working/GC-content.csv");
+	#rawCorrelStatData("AAAA", "/home/infotech/jalnasir/Data/Drosophila/_working/herc-final-AAAA.csv", True);
+	#exit(0);
 
 	#data = [(x+1)**x for x in range(size)];
 	#print "scattering {}".format(data);
@@ -814,6 +911,15 @@ if rank == 0:
 	
 	# wait for ALL nodes to complete before combining MOTIF map steps
 	syncWait();
+
+	lstAllGCcorrels = [];
+	for i in range(0, 256):
+		fourmer = lstMotifs[i];
+		fourmerCorrelFileGC = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".gc.correl";
+
+		lstFourmerGCcorrel = loadObject(fourmerCorrelFileGC);
+		lstAllGCcorrels.extend(lstFourmerGCcorrel);
+	saveObject(CONF_LFS_WORKING_ + 'all.gc.correl', lstAllGCcorrels);
 
 	# retire nodes
 	for i in range(1, size):
@@ -856,12 +962,6 @@ if rank <> 0:
 		if (tag == tags.INITIALISE):
 			pprint("received the command to initialise.");
 			pprint("up and ready to go!");
-
-		if (tag == tags.UNLOADGTF):
-			pprint("received the command to unload GTF cache.");
-			del lstGTF_feat;
-			del lstGTF_chr;
-			
 
 		if (tag == tags.WORK):
 			pprint("received the command to do work!");
@@ -916,6 +1016,7 @@ if rank <> 0:
 					fourmerFile = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".csv";
 					fourmerQ1File = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".q1";
 					fourmerCorrelFile = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".correl";
+					fourmerCorrelFileGC = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".gc.correl";
 
 
 					# Load 1st Quartile (Q1) from file
@@ -926,10 +1027,15 @@ if rank <> 0:
 					motifCorrel = _calcCorrelStat(fourmer, fourmerFile, False);
 					print motifCorrel;
 
+					# Compute GC cycled correlations
+					lstMotifCorrels = rawCorrelStatData(fourmer, fourmerFile, False);
 
-					# Save result (Q1 to file)					
+
+					# Save results
+					# (Q1 to file)					
 					saveObject(fourmerCorrelFile, motifCorrel);
-					
+					# Raw GC cycled correls
+					saveObject(fourmerCorrelFileGC, lstMotifCorrels);
 			
 				syncMaster();
 
