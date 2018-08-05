@@ -8,7 +8,7 @@
 #//
 #//==============================================================================
 # Hercules-mpi: MPI implementation of Hercules transcriptomics analysis
-# Dr. Jamie Alnasir
+# Jamie Alnasir
 #
 # Copyright (c) 2018, Dr. Jamie Alnasir, all rights reserved
 #
@@ -610,6 +610,14 @@ def rawCorrelStatData(motif, motifFile, bPrint):
 	
 	return lstRawCorrelData;
 
+
+def saveRawCorrelationsData(aFile, lstAllCorrels):
+	lines = []
+	for i in lstAllCorrels:
+		lineStr = ",".join(map(str, i));
+		lines.append(lineStr);
+	saveText(aFile, lines);
+
 def printCorrelStat():
 
 	OutlierCount = 10;
@@ -868,7 +876,7 @@ else:
         _STR_CORREL_ = "Pearson Correlation";
 
 # Load Exon GC dictionary
-LoadGC("/home/infotech/jalnasir/Data/Drosophila/_working/GC-content.csv");
+LoadGC(CONF_LFS_WORKING_ + "GC-content.csv");
 
 #//------------------------------------------------------------------------------
 # MASTER process
@@ -880,19 +888,6 @@ if rank == 0:
 	print "GTF path: {}".format(CONF_LFS_GTF_FILE_FILTERED_);
 	print "SAM path: {}".format(CONF_LFS_SAM_READS_);
 	print "Working folder: {}".format(CONF_LFS_WORKING_);
-	print "Report Output folder: {}".format(CONF_LFS_OUT_);
-
-	#LoadGC("/home/infotech/jalnasir/Data/Drosophila/_working/GC-content.csv");
-	#rawCorrelStatData("AAAA", "/home/infotech/jalnasir/Data/Drosophila/_working/herc-final-AAAA.csv", True);
-	#exit(0);
-
-	#data = [(x+1)**x for x in range(size)];
-	#print "scattering {}".format(data);
-
-	#result = scatter(data);
-	#result = doScatterWork(result);
-	#print "RANK0, ",result;
-	#lstReceived.append(result);
 
 	for i in range(1, size):
 		ping(i);
@@ -919,7 +914,12 @@ if rank == 0:
 
 		lstFourmerGCcorrel = loadObject(fourmerCorrelFileGC);
 		lstAllGCcorrels.extend(lstFourmerGCcorrel);
-	saveObject(CONF_LFS_WORKING_ + 'all.gc.correl', lstAllGCcorrels);
+
+		# Remove GC correl file as we're done with it
+		os.popen("rm " + fourmerCorrelFileGC);
+
+	saveObject(CONF_LFS_WORKING_ + "all.gc.correl", lstAllGCcorrels);
+	saveRawCorrelationsData(CONF_LFS_OUT_ + "All-correls.csv", lstAllGCcorrels);
 
 	# retire nodes
 	for i in range(1, size):
@@ -927,6 +927,9 @@ if rank == 0:
 
 
 	doReporting();
+
+	# Clear files we're done with
+	os.popen("rm " + CONF_LFS_WORKING_ + "*.q1");
 
 
 
@@ -1029,7 +1032,6 @@ if rank <> 0:
 
 					# Compute GC cycled correlations
 					lstMotifCorrels = rawCorrelStatData(fourmer, fourmerFile, False);
-
 
 					# Save results
 					# (Q1 to file)					
