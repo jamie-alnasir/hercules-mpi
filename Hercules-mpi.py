@@ -9,7 +9,7 @@
 #//==============================================================================
 
 # Hercules-mpi: MPI implementation of Hercules transcriptomics analysis
-# Jamie Alnasir
+# Dr. Jamie Alnasir
 #
 # Copyright (c) 2018, Dr. Jamie Alnasir, all rights reserved
 #
