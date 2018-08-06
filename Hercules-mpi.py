@@ -9,7 +9,7 @@
 #//==============================================================================
 
 # Hercules-mpi: MPI implementation of Hercules transcriptomics analysis
-# Dr. Jamie Alnasir
+# Jamie Alnasir
 #
 # Copyright (c) 2018, Dr. Jamie Alnasir, all rights reserved
 #
@@ -228,7 +228,7 @@ def combineWorkGTFSAM():
 	# remove any previous result	
 	pprint("attempting to remove any previous result: GTF-SAM.final.dat");
 	gtfsamFile = CONF_LFS_WORKING_ + "GTF-SAM.final.dat";
-	os.popen("rm " + gtfsamFile);
+	os.popen("rm -f " + gtfsamFile);
 
 	# old method, non serialised
 	#for i in range(1, size):
@@ -262,7 +262,7 @@ def combineMotifMap(aMotif):
 
 	# remove any previous result	
 	motifmapFile = CONF_LFS_WORKING_ + "MOTIF." + aMotif + ".final.dat";
-	os.popen("rm " + motifmapFile);
+	os.popen("rm -f " + motifmapFile);
 
 	# old method, non serialised
 	#for i in range(1, size):
@@ -274,7 +274,7 @@ def combineMotifMap(aMotif):
 	# remove GTF-SAM motif file from LFS - but only after serialised work completed
 	gtfsamFileMotif = CONF_LFS_WORKING_ + "GTF-SAM." + aMotif + ".dat";
 	if CONF_REMOVE_INTERMEDIATES_:
-		os.popen("rm " + gtfsamFileMotif);
+		os.popen("rm -f " + gtfsamFileMotif);
 
 
 
@@ -284,7 +284,7 @@ def allocWorkMotifReduce(aMotif):
 # send out MOTIF reduce work to nodes
 
 	motifmapFile = CONF_LFS_WORKING_ + "MOTIF." + aMotif + ".final.dat";
-	#os.popen("rm " + motifmapFile);
+	#os.popen("rm -f " + motifmapFile);
 
 	pprint("analysing motif-mapped reads with MOTIF={} (this may take some time): ".format(aMotif, motifmapFile));
 	motifLen = fileLineLen(motifmapFile);
@@ -304,10 +304,8 @@ def combineMotifReduce(aMotif):
 	# remove any previous result	
 	motifreduceFile = CONF_LFS_WORKING_ + "MOTIF.REDUCE." + aMotif + ".final.dat";
 	motifreduceCSVFile = CONF_LFS_WORKING_ + "herc-final-" + aMotif + ".csv";
-	os.popen("rm " + motifreduceFile);
-
-	# Replace _ with , for CSV format
-	os.popen("sed -i 's/_/,/g' " + motifreduceCSVFile);
+ 	
+	os.popen("rm -f " + motifreduceFile);
 
 	serialiseWork(tasks.MOTIFREDUCECOMBINE, aMotif);
 	
@@ -320,15 +318,18 @@ def combineMotifReduce(aMotif):
 	lstMR = loadText(motifreduceFileSorted);
 	lstMRResult = reduceTupleList(lstMR, False); # We've already pre-sorted
 	saveText(motifreduceCSVFile, lstMRResult);
-	
+
+	# Replace _ with , for CSV format
+        os.popen("sed -i 's/_/,/g' " + motifreduceCSVFile);
+
 	
 	if CONF_REMOVE_INTERMEDIATES_:
 		motifmapFile = CONF_LFS_WORKING_ + "MOTIF." + aMotif + ".final.dat";
 		motifreduceFile = CONF_LFS_WORKING_ + "MOTIF.REDUCE." + aMotif + ".final.dat*"; # and .sorted
 
 		pprint("removing intermediate data from MOTIF map and reduce steps");
-		os.popen("rm " + motifmapFile);
-		os.popen("rm " + motifreduceFile);
+		os.popen("rm -f " + motifmapFile);
+		os.popen("rm -f " + motifreduceFile);
 
 
 
@@ -348,7 +349,7 @@ def combineGCMap():
 	# remove any previous result	
 	pprint("attempting to remove any previous result: GC.final.dat");
 	GCDataFile = CONF_LFS_WORKING_ + "GC.final.dat";
-	os.popen("rm " + GCDataFile);
+	os.popen("rm -f " + GCDataFile);
 
 	# old method, non serialised
 	#for i in range(1, size):
@@ -886,7 +887,7 @@ if rank <> 0:
 
 					# remove wkrFile from LFS
 					if CONF_REMOVE_INTERMEDIATES_:
-						os.popen("rm " + wrkFile);
+						os.popen("rm -f " + wrkFile);
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
 
@@ -964,7 +965,7 @@ if rank <> 0:
 					pprint("written MOTIF map step file: {}".format(motifmapFile));
 
 					if CONF_REMOVE_INTERMEDIATES_:
-						os.popen("rm " + wrkFile);
+						os.popen("rm -f " + wrkFile);
 
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
@@ -1002,7 +1003,7 @@ if rank <> 0:
 					pprint("written MOTIF map step file: {}".format(motifreduceFile));
 
 					if CONF_REMOVE_INTERMEDIATES_:
-						os.popen("rm " + wrkFile);
+						os.popen("rm -f " + wrkFile);
 
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
@@ -1040,7 +1041,7 @@ if rank <> 0:
 					pprint("written GC map step file: {}".format(GCDataFile));
 
 					#if CONF_REMOVE_INTERMEDIATES_:
-					#	os.popen("rm " + wrkFileGC);
+					#	os.popen("rm -f " + wrkFileGC);
 
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
