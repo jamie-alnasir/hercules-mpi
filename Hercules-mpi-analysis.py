@@ -94,6 +94,9 @@ _CORREL_STAT_SPEARMAN_ = False;
 CORREL_STAT_STR = "";
 FIRST_QUARTILE = 1;
 
+# Current Date
+DATE_TIME_STR = datetime.date.today().strftime("%B %d, %Y");
+
 
 def enum(*sequential, **named):
 	"""Handy way to fake an enumerated type in Python
@@ -714,8 +717,7 @@ def printCorrelStat():
 	lstHTMLReport.append("</table>");
  
  
-def getHTMLStart():
-	DateTimeStr = datetime.date.today().strftime("%B %d, %Y");
+def getHTMLStart():	
 	return """<body>
 <h1>Hercules - Fourmer Motif Analysis Report</h1>
 <br>
@@ -738,7 +740,7 @@ Refer to the following papers:
   </li>
 </ul>
  
-<h2>All fourmer motifs ({stat})</h2>""".format(dt=DateTimeStr, gtf=CONF_LFS_GTF_FILE_FILTERED_, sam=CONF_LFS_SAM_READS_, stat=CORREL_STAT_STR);
+<h2>All fourmer motifs ({stat})</h2>""".format(dt=DATE_TIME_STR, gtf=CONF_LFS_GTF_FILE_FILTERED_, sam=CONF_LFS_SAM_READS_, stat=CORREL_STAT_STR);
  
 def getHTMLEnd():
 	return """</body>""";
@@ -750,7 +752,16 @@ def doReporting():
 	lstHTMLReport.append("<table width=\"880\" border=\"1\" cellpadding=\"3\" cellspacing=\"0\">");
 	lstHTMLReport.append("<tr><td><b>Motif</b></td><td><b>Q1</b></td><td><b>r<sup>2</sup> (10 bp)</b></td><td><b>r<sup>2</sup> (50 bp)</b></td><td><b>r<sup>2</sup> (100 bp)</b></td><td><b>r<sup>2</sup> (200 bp)</b></td></tr>");
  
+
+	# Text report header
+	lstReportAllFourmers.append("Hercules - Fourmer Motif Analysis Report ({stat})".format(stat=CORREL_STAT_STR));
+	lstReportAllFourmers.append("");
+	lstReportAllFourmers.append("{dt}".format(dt=DATE_TIME_STR));
+	lstReportAllFourmers.append("GTF Annotation: {gtf}".format(gtf=CONF_LFS_GTF_FILE_FILTERED_));
+	lstReportAllFourmers.append("SAM reads: {sam}".format(sam=CONF_LFS_SAM_READS_));
+	lstReportAllFourmers.append("");
 	lstReportAllFourmers.append("Motif, Q1, r^2(10 bp), r^2(50 bp), r^2(100 bp), r^2(200 bp)");
+
  
 	for fourmer in lstMotifs:	   
 		fourmerQ1File = CONF_LFS_WORKING_ + "herc-final-" + fourmer + ".q1";
