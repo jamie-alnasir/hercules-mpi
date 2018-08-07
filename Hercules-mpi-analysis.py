@@ -1,6 +1,6 @@
 #//==============================================================================
-#//	_	_					 _		   
-#//   | |  | |				   | |		  
+#//    _    _
+#//   | |  | |                    _
 #//   | |__| | ___ _ __ ___ _   _| | ___  ___ 
 #//   |  __  |/ _ \ '__/ __| | | | |/ _ \/ __|
 #//   | |  | |  __/ | | (__| |_| | |  __/\__ \
@@ -72,9 +72,10 @@ CONF_LFS_WORKING_		   	= "";
 CONF_LFS_GTF_FILE_FILTERED_ = "";
 CONF_LFS_SAM_READS_		 	= "";
 CONF_LFS_OUT_				= "";
-REPORT_HTML					= "Hercules-report.html";
-REPORT_TXT					= "All-fourmers.txt";
- 
+REPORT_HTML				= "Hercules-report.html";
+REPORT_TXT				= "All-fourmers.txt";
+REPORT_SPEARMAN_HTML			= "Hercules-report-spearman.html";
+REPORT_SPEARMAN_TXT			= "All-fourmers-spearman.txt"; 
  
  
 # Nucleotide bases
@@ -90,8 +91,10 @@ _GC_FILTER_MAX_ = 70;
 
 _MIN_CORRELATION_COUNTS_ = 10; # NORMALLY 10
 _CORREL_STAT_SPEARMAN_ = False;
+CORREL_STAT_STR = "";
 FIRST_QUARTILE = 1;
- 
+
+
 def enum(*sequential, **named):
 	"""Handy way to fake an enumerated type in Python
 	http://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
@@ -660,7 +663,7 @@ def printCorrelStat():
  
  
 	lstHTMLReport.append("<br><br>");
-	lstHTMLReport.append("<h2>Fourmer Outliers</h2>");
+	lstHTMLReport.append("<h2>Fourmer Outliers ({stat})</h2>".format(stat=CORREL_STAT_STR));
  
 	lstHTMLReport.append("<table border=\"1\" cellpadding=\"3\" cellspacing=\"0\">");
 	lstHTMLReport.append("<tr><td colspan=\"4\"><b>Lowest Outliers</b></td></tr>");
@@ -735,7 +738,7 @@ Refer to the following papers:
   </li>
 </ul>
  
-<h2>All fourmer motifs</h2>""".format(dt=DateTimeStr, gtf=CONF_LFS_GTF_FILE_FILTERED_, sam=CONF_LFS_SAM_READS_);
+<h2>All fourmer motifs ({stat})</h2>""".format(dt=DateTimeStr, gtf=CONF_LFS_GTF_FILE_FILTERED_, sam=CONF_LFS_SAM_READS_, stat=CORREL_STAT_STR);
  
 def getHTMLEnd():
 	return """</body>""";
@@ -779,7 +782,10 @@ def doReporting():
 	lstHTMLReport.append("</table>");
  
 	# Save the correlations report
-	saveText(CONF_LFS_OUT_ + REPORT_TXT, lstReportAllFourmers);
+	if _CORREL_STAT_SPEARMAN_:
+		saveText(CONF_LFS_OUT_ + REPORT_SPEARMAN_TXT, lstReportAllFourmers);
+	else:
+		saveText(CONF_LFS_OUT_ + REPORT_TXT, lstReportAllFourmers);
  
 	# Save the correlations dictionary
 	saveObject(CONF_LFS_WORKING_ + "ALL-CORRELS.dat", dictCorrels);
@@ -788,7 +794,10 @@ def doReporting():
 	printCorrelStat();
  
 	lstHTMLReport.append(getHTMLEnd());
-	saveText(CONF_LFS_OUT_  + REPORT_HTML, lstHTMLReport);
+	if _CORREL_STAT_SPEARMAN_:
+		saveText(CONF_LFS_OUT_  + REPORT_SPEARMAN_HTML, lstHTMLReport);
+	else:
+		saveText(CONF_LFS_OUT_  + REPORT_HTML, lstHTMLReport);
  
  
  
@@ -801,7 +810,8 @@ dictCorrels = {}; # To store ALL of the computed correlations, in the form 'AAAA
 lstHTMLReport = []; # To store HTML report
  
 lstReportAllFourmers = [];
- 
+
+
  
 # Make a list of the fourmers to perform computations on. This will be processed in blocks
 # by the workers.
@@ -820,7 +830,9 @@ parser.add_option("-g", "--gtf", action="store", type="string", dest="GTF", defa
 parser.add_option("-s", "--sam",	 action="store", type="string", dest="SAM",   help="path to SAM reads file (single end reads)");
 parser.add_option("-w", "--wrk", action="store", type="string", dest="WRK", help="path to working folder where computation is performed");
 parser.add_option("-o", "--output", action="store", type="string", dest="OUT", help="path to folder where Hercules-report.html and All-fourmers.txt are written");
- 
+parser.add_option("-r", "--spearman", action="store_true", dest="SPEARMAN", help="Use Spearman's rank instead of Pearson correlation", default=False);
+
+
  
 (options, args) = parser.parse_args()
  
@@ -829,11 +841,25 @@ if len(sys.argv) == 1:
 		parser.print_help()
 	exit(0);
 else:	
+
+	if (options.GTF == None) or (options.SAM == None) or (options.WRK == None) or (options.OUT == None):
+		if (rank == 0):
+			print "GTF (-g), SAM (-s), Working folder (-w) and Output folder (-o) options MUST all be specified."
+		exit(0);
+
 	CONF_LFS_GTF_FILE_FILTERED_ = options.GTF;
 	CONF_LFS_SAM_READS_ = options.SAM;
 	CONF_LFS_WORKING_ = os.path.join(options.WRK, '');
 	CONF_LFS_OUT_ = os.path.join(options.OUT, '');
+	_CORREL_STAT_SPEARMAN_ = options.SPEARMAN;
+
  
+
+if _CORREL_STAT_SPEARMAN_:
+	CORREL_STAT_STR = "Spearman's Rank correlation";
+else:
+	CORREL_STAT_STR = "Pearson's correlation";
+
 
 # Load Exon GC dictionary
 LoadGC(CONF_LFS_WORKING_ + "GC-content.csv");
