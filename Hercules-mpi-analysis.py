@@ -17,14 +17,11 @@
 #
 # Based on my PhD under the supervision of Dr. Hugh Shanahan
 #
-# Alnasir, J. & Shanahan, H. P. (2017). Transcriptomics: Quantifying non-uniform read distribution using MapReduce.. International Journal of Foundations of Computer Science, 29(8). [ Read (preprint) ]
+# Alnasir, J. & Shanahan, H. P. (2018). Transcriptomics: Quantifying non-uniform read distribution using MapReduce.. International Journal of Foundations of Computer Science, 29(8).
 #
-# Alnasir, J., & Shanahan, H. (2018). A novel method to detect bias in Short Read NGS RNA-seq data. Journal of Integrative Bioinformatics, 14(3). [ Read ]
+# Alnasir, J., & Shanahan, H. (2017). A novel method to detect bias in Short Read NGS RNA-seq data. Journal of Integrative Bioinformatics, 14(3).
 #
-# Alnasir, J., & Shanahan, H. P. (2015). Transcriptomics on Spark Workshop - Introducing Hercules - an Apache Spark MapReduce algorithm for quantifying non-uniform gene expression. CloudTech'16, Marrakech, Morocco. [ Read]
- 
- 
-# ** BEFORE RUNNING: MUST EDIT HerculesConf with configration **
+# Alnasir, J., & Shanahan, H. P. (2015). Transcriptomics on Spark Workshop - Introducing Hercules - an Apache Spark MapReduce algorithm for quantifying non-uniform gene expression. CloudTech'16, Marrakech, Morocco.
  
  
 #//------------------------------------------------------------------------------
@@ -42,6 +39,7 @@ import time;
 import random;
 import pickle;
 import datetime;
+from subprocess import call
   
 # Stats libraries
 import numpy as np
@@ -728,18 +726,17 @@ SAM reads: {sam}<br>
 Refer to the following papers:
 <ul>
   <li>
-        <p style=\"line-height: 150%\" align=\"left\">Alnasir, J.  &amp; Shanahan, H. P. 
-        (2018). <b> Transcriptomics: Quantifying non-uniform read distribution using MapReduce.</b>.
-        <i>International Journal of Foundations of Computer Science, Vol. 29, No. 8.</i></p>
+	<p style=\"line-height: 150%\" align=\"left\">Alnasir, J.  &amp; Shanahan, H. P. 
+	(2018). <b> Transcriptomics: Quantifying non-uniform read distribution using MapReduce.</b>.
+	<i>International Journal of Foundations of Computer Science, Vol. 29, No. 8.</i></p>
   </li>
  
   <li>
-        <p style=\"line-height: 150%\" align=\"left\">Alnasir, J., &amp; Shanahan, H. P.
-        (2017). <b>A novel method to detect bias in Short Read NGS RNA-seq data</b>.
-        <i>Journal of Integrative Bioinformatics, Vol 14, No. 3.</i></p>
+	<p style=\"line-height: 150%\" align=\"left\">Alnasir, J., &amp; Shanahan, H. P.
+	(2017). <b>A novel method to detect bias in Short Read NGS RNA-seq data</b>.
+	<i>Journal of Integrative Bioinformatics, Vol 14, No. 3.</i></p>
   </li>
 </ul>
-
  
 <h2>All fourmer motifs ({stat})</h2>""".format(dt=DATE_TIME_STR, gtf=CONF_LFS_GTF_FILE_FILTERED_, sam=CONF_LFS_SAM_READS_, stat=CORREL_STAT_STR);
  
@@ -792,6 +789,11 @@ def doReporting():
  
  
 	lstHTMLReport.append("</table>");
+
+  # Correlation vs Motif GC Box Plot
+	lstHTMLReport.append("<h2>Correlations as a function of GC content</h2>");
+	lstHTMLReport.append("<img src='All-correls.png'>");
+
  
 	# Save the correlations report
 	if _CORREL_STAT_SPEARMAN_:
@@ -810,6 +812,11 @@ def doReporting():
 		saveText(CONF_LFS_OUT_  + REPORT_SPEARMAN_HTML, lstHTMLReport);
 	else:
 		saveText(CONF_LFS_OUT_  + REPORT_HTML, lstHTMLReport);
+
+	# Produce the Correlation vs GC Box plot for the report
+	# It creates All-correls.png graphic which is included in the report
+	call(["python", CONF_LFS_OUT_ + "/Hercules-analysis-plot.py"])
+
  
  
  
