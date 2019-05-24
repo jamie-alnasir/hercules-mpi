@@ -791,7 +791,7 @@ def doReporting():
 	lstHTMLReport.append("</table>");
 
   # Correlation vs Motif GC Box Plot
-	lstHTMLReport.append("<h2>Correlations as a function of GC content</h2>");
+	lstHTMLReport.append("<h2>Correlations as a function of GC content ({stat})</h2>".format(stat=CORREL_STAT_STR));
 	lstHTMLReport.append("<img src='All-correls.png'>");
 
  
