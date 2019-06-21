@@ -321,7 +321,7 @@ def combineMotifReduce(aMotif):
 	saveText(motifreduceCSVFile, lstMRResult);
 
 	# Replace _ with , for CSV format
-	subprocess.call(["sed", "-i", 's/_/,/g'], stdout = open( motifreduceCSVFile, 'w') );
+	subprocess.call(["sed", "-i", 's/_/,/g', motifreduceCSVFile]);
 
 	
 	if CONF_REMOVE_INTERMEDIATES_:
