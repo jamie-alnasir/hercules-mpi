@@ -37,6 +37,7 @@ import os;
 import os.path;
 import re;
 from itertools import groupby;
+import subprocess;
 
 
 # MPI initialization
@@ -228,7 +229,7 @@ def combineWorkGTFSAM():
 	# remove any previous result	
 	pprint("attempting to remove any previous result: GTF-SAM.final.dat");
 	gtfsamFile = CONF_LFS_WORKING_ + "GTF-SAM.final.dat";
-	os.popen("rm -f " + gtfsamFile);
+	forceFileDelete(gtfsamFile);
 
 	# old method, non serialised
 	#for i in range(1, size):
@@ -243,7 +244,7 @@ def allocWorkMotifMap(aMotif):
 
 	gtfsamFile      = CONF_LFS_WORKING_ + "GTF-SAM.final.dat";
 	gtfsamFileMotif = CONF_LFS_WORKING_ + "GTF-SAM." + aMotif + ".dat";
-	os.popen("grep " + aMotif + " " + gtfsamFile + " >" + gtfsamFileMotif);
+	subprocess.call(["grep", aMotif, gtfsamFile], stdout = open( gtfsamFileMotif, 'w') );
 
 	pprint("analysing reads with MOTIF={} (this may take some time): ".format(aMotif, gtfsamFileMotif));
 	motifLen = fileLineLen(gtfsamFileMotif);
@@ -262,7 +263,7 @@ def combineMotifMap(aMotif):
 
 	# remove any previous result	
 	motifmapFile = CONF_LFS_WORKING_ + "MOTIF." + aMotif + ".final.dat";
-	os.popen("rm -f " + motifmapFile);
+	forceFileDelete(motifmapFile);
 
 	# old method, non serialised
 	#for i in range(1, size):
@@ -274,7 +275,7 @@ def combineMotifMap(aMotif):
 	# remove GTF-SAM motif file from LFS - but only after serialised work completed
 	gtfsamFileMotif = CONF_LFS_WORKING_ + "GTF-SAM." + aMotif + ".dat";
 	if CONF_REMOVE_INTERMEDIATES_:
-		os.popen("rm -f " + gtfsamFileMotif);
+		forceFileDelete(gtfsamFileMotif);
 
 
 
@@ -284,7 +285,7 @@ def allocWorkMotifReduce(aMotif):
 # send out MOTIF reduce work to nodes
 
 	motifmapFile = CONF_LFS_WORKING_ + "MOTIF." + aMotif + ".final.dat";
-	#os.popen("rm -f " + motifmapFile);
+	#forceFileDelete(motifmapFile);
 
 	pprint("analysing motif-mapped reads with MOTIF={} (this may take some time): ".format(aMotif, motifmapFile));
 	motifLen = fileLineLen(motifmapFile);
@@ -305,7 +306,7 @@ def combineMotifReduce(aMotif):
 	motifreduceFile = CONF_LFS_WORKING_ + "MOTIF.REDUCE." + aMotif + ".final.dat";
 	motifreduceCSVFile = CONF_LFS_WORKING_ + "herc-final-" + aMotif + ".csv";
  	
-	os.popen("rm -f " + motifreduceFile);
+	forceFileDelete(motifreduceFile);
 
 	serialiseWork(tasks.MOTIFREDUCECOMBINE, aMotif);
 	
@@ -313,14 +314,14 @@ def combineMotifReduce(aMotif):
 	# split accross a key amd may not have been completed in order on the workers.
 	motifreduceFileSorted = motifreduceFile + ".sorted";
 	# Sort the entire intermediate result
-	os.popen("sort " + motifreduceFile + " >" + motifreduceFileSorted);
+	subprocess.call(["sort", motifreduceFile], stdout = open( motifreduceFileSorted, 'w') );
 	
 	lstMR = loadText(motifreduceFileSorted);
 	lstMRResult = reduceTupleList(lstMR, False); # We've already pre-sorted
 	saveText(motifreduceCSVFile, lstMRResult);
 
 	# Replace _ with , for CSV format
-        os.popen("sed -i 's/_/,/g' " + motifreduceCSVFile);
+	subprocess.call(["sed", "-i", 's/_/,/g'], stdout = open( motifreduceCSVFile, 'w') );
 
 	
 	if CONF_REMOVE_INTERMEDIATES_:
@@ -328,8 +329,8 @@ def combineMotifReduce(aMotif):
 		motifreduceFile = CONF_LFS_WORKING_ + "MOTIF.REDUCE." + aMotif + ".final.dat*"; # and .sorted
 
 		pprint("removing intermediate data from MOTIF map and reduce steps");
-		os.popen("rm -f " + motifmapFile);
-		os.popen("rm -f " + motifreduceFile);
+		forceFileDelete(motifmapFile);
+		forceFileDelete(motifreduceFile);
 
 
 
@@ -349,7 +350,7 @@ def combineGCMap():
 	# remove any previous result	
 	pprint("attempting to remove any previous result: GC.final.dat");
 	GCDataFile = CONF_LFS_WORKING_ + "GC.final.dat";
-	os.popen("rm -f " + GCDataFile);
+	forceFileDelete(GCDataFile);
 
 	# old method, non serialised
 	#for i in range(1, size):
@@ -408,6 +409,12 @@ def saveText(aOutFile, data):
 	with open(aOutFile, "w") as f:
 		for i in data:
 			f.write(i + "\n");
+
+
+def forceFileDelete(aFile):
+# Forcefully delete a file
+  subprocess.call(["rm", "-rf", aFile]);
+
 
 def CigarToTupleList(aCigarStr):
 # Parse a CIGAR string into a list of tuples [(length,operation),(length,operation),(length,operation)]
@@ -664,7 +671,7 @@ parser.add_option("-g", "--gtf", action="store", type="string", dest="GTF", defa
 parser.add_option("-s", "--sam",     action="store", type="string", dest="SAM",   help="path to SAM reads file (single end reads)");
 parser.add_option("-w", "--wrk", action="store", type="string", dest="WRK", help="path to working folder where computation is performed");
 parser.add_option("-o", "--output", action="store", type="string", dest="OUT", help="path to folder where Hercules-report.html and All-fourmers.txt are written");
-parser.add_option("-r", action="store_true", dest="REMOVE_INTERMEDIATES", default=False);
+parser.add_option("-r", "--spearman", action="store_true", dest="REMOVE_INTERMEDIATES", default=False, help="Remove intermediate files");
 
 
 
@@ -691,6 +698,7 @@ else:
 #//------------------------------------------------------------------------------
 
 if rank == 0:
+
 	#data = [(x+1)**x for x in range(size)];
 	#print "scattering {}".format(data);
 
@@ -707,10 +715,31 @@ if rank == 0:
 		initialise(i);
 		
 	gtfsamFile = CONF_LFS_WORKING_ + "GTF-SAM.final.dat";
+	rankSizeFile   = CONF_LFS_WORKING_ + "rank-size";
+
+
+	# SORT ON "CHR" (str) AND "FEATURE START" (num) IS CRITICAL FOR GTF LOOK-UP'S
+	# BINARY SEARCH TREE ALGORITHM! Linux sort command supports in place sorting,
+	# if output (-o) is specified is the same as the input file it creates a temporary file
+	# and then copies  back to the given filename.
+	#subprocess.call(["sort", "-k1,1", "-k4,4n", CONF_LFS_GTF_FILE_FILTERED_, "-o", CONF_LFS_GTF_FILE_FILTERED_]);
+
+
+        # If GTF-SAM file and rank-size file exists, and previous rank-size matches
+	# current rank size, then don't perform the GTF-SAM map step
+        # NB: to allow kick-off from after GTF-SAM map step
+	bPotentialResume = (os.path.exists(gtfsamFile) and os.path.exists(rankSizeFile));
+
+
+	if bPotentialResume:
+		# Check previous mpi instance/rank size to see if we can resume (dependent on the number of chunks
+		# previously created). We can resume if previous job had the same size of ranks.
+		prevRankSize = int(loadText(rankSizeFile)[0]);
+		bResumable = ( bPotentialResume and (prevRankSize == size) );
+	else:
+		bResumable = False;
 	
-	# If GTF-SAM file exists, don't perform the GTF-SAM map step
-	# NB: to allow kick-off from after GTF-SAM map step
-	if not os.path.exists(gtfsamFile):
+	if not bResumable:
 
 		allocWorkGTFSAM();
 
@@ -723,8 +752,15 @@ if rank == 0:
 		combineWorkGTFSAM(); # SERIALISED
 		# combineWorkGTFSAM() is serialised so will have already waited for all workers to complete
 
+                # Save mpi instances 'size' to file in case workflow requires resumption after intensive GTF-SAM step
+                # Number of chunks is dependent on mpi size, so we cannot resume if previously used a different number
+                # of mpi processes. Size in rank-size file will be compared on job resumption.
+                saveText(CONF_LFS_WORKING_ + "rank-size", [str(size)]);
+
 	else:
 		pprint(">> Starting off from previously performed GTF-MAP step");
+
+
 		
 	#syncWait();
 
@@ -803,13 +839,6 @@ if rank <> 0:
 		if (tag == tags.INITIALISE):
 			pprint("received the command to initialise.");
 
-
-			# SORT ON "CHR" (str) AND "FEATURE START" (num) IS CRITICAL FOR GTF LOOK-UP'S
-			# BINARY SEARCH TREE ALGORITHM! Linux sort command supports in place sorting,
-			# if output (-o) is specified is the same as the input file it creates a temporary file
-			# and then copies  back to the given filename.
-			os.popen("sort -k1,1 -k4,4n " + CONF_LFS_GTF_FILE_FILTERED_ + " -o " + CONF_LFS_GTF_FILE_FILTERED_);
-
 			# preload the GTF annotation
 			fr = open(CONF_LFS_GTF_FILE_FILTERED_, 'r');	
 			gtf_lines = fr.readlines();			
@@ -824,10 +853,11 @@ if rank <> 0:
 				# Optimisation
 				# Build list of chromosome ranges
 				if (chr <> cur_chr):
-						cur_chr = chr;
-						lstGTF_chr.append([chr, x, -1]);
-						if (x > 0):
-							lstGTF_chr[len(lstGTF_chr) - 2][2] = x - 1;
+					cur_chr = chr;
+					lstGTF_chr.append([chr, x, -1]);
+					if (x > 0):
+						lstGTF_chr[len(lstGTF_chr) - 2][2] = x - 1;
+			pprint("GTF_LINES-LEN=" + str(len(gtf_lines)));
 			lstGTF_chr[len(lstGTF_chr) - 1][2] = len(gtf_lines) - 1;
 
 			# Optimisation
@@ -882,12 +912,12 @@ if rank <> 0:
 					gtfsamFile = CONF_LFS_WORKING_ + "GTF-SAM.final.dat";
 
 					# filter out the un-partitionable reads
-					os.popen("grep -v '\-1' " + wrkFile + " >>" + gtfsamFile);
+					subprocess.call(["grep", "-v", '\-1', wrkFile], stdout = open( gtfsamFile, 'a') );
 					pprint("written GTF-SAM step file: {}".format(gtfsamFile));
 
 					# remove wkrFile from LFS
 					if CONF_REMOVE_INTERMEDIATES_:
-						os.popen("rm -f " + wrkFile);
+						forceFileDelete(wrkFile);
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
 
@@ -961,11 +991,11 @@ if rank <> 0:
 				motifmapFile = CONF_LFS_WORKING_ + "MOTIF." + aMotif + ".final.dat";
 				if os.path.exists(wrkFile):
 					
-					os.popen("cat " + wrkFile + " >>" + motifmapFile);
+					subprocess.call(["cat", wrkFile], stdout = open( motifmapFile, 'a') );
 					pprint("written MOTIF map step file: {}".format(motifmapFile));
 
 					if CONF_REMOVE_INTERMEDIATES_:
-						os.popen("rm -f " + wrkFile);
+						forceFileDelete(wrkFile);
 
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
@@ -999,11 +1029,11 @@ if rank <> 0:
 				motifreduceFile = CONF_LFS_WORKING_ + "MOTIF.REDUCE." + aMotif + ".final.dat";
 				if os.path.exists(wrkFile):
 					
-					os.popen("cat " + wrkFile + " >>" + motifreduceFile);
+					subprocess.call(["cat", wrkFile], stdout = open( motifreduceFile, 'a'));
 					pprint("written MOTIF map step file: {}".format(motifreduceFile));
 
 					if CONF_REMOVE_INTERMEDIATES_:
-						os.popen("rm -f " + wrkFile);
+						forceFileDelete(wrkFile);
 
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
@@ -1037,11 +1067,11 @@ if rank <> 0:
 				GCDataFile = CONF_LFS_WORKING_ + "GC.final.dat";
 				if os.path.exists(wrkFileGC):
 					
-					os.popen("cat " + wrkFileGC + " >>" + GCDataFile);
+					subprocess.call(["cat", wrkFileGC], stdout = open( GCDataFile, 'a') );
 					pprint("written GC map step file: {}".format(GCDataFile));
 
 					#if CONF_REMOVE_INTERMEDIATES_:
-					#	os.popen("rm -f " + wrkFileGC);
+					#	forceFileDelete(wrkFileGC);
 
 				else:
 					pprint("error, input file doesn't exist {}".format(wrkFile));
