@@ -4,7 +4,7 @@
 #//   | |__| | ___ _ __ ___ _   _| | ___  ___ 
 #//   |  __  |/ _ \ '__/ __| | | | |/ _ \/ __|
 #//   | |  | |  __/ | | (__| |_| | |  __/\__ \
-#//   |_|  |_|\___|_|  \___|\__,_|_|\___||___/ MPI
+#//   |_| |_|\___|_|  \___|\__,_|_|\___||___/ MPI
 #//
 #//==============================================================================
 # Hercules-mpi: MPI implementation of Hercules transcriptomics analysis
@@ -248,10 +248,14 @@ def allocWork1Q():
  
 	motifCount = 256;
 	chunkMotifs = motifCount / (size - 1);
-	pprint("Number of motifs =".format(motifCount));
+	bRemainder = (motifCount % (size - 1) != 0);
+	pprint("Number of motifs = {}".format(motifCount));
 	pprint("allocating {} motifs per worker process".format(chunkMotifs));
 	params = chunkRanges(0, motifCount, chunkMotifs);
- 
+
+    # If any remainder chunk, add them to last hosts job (by concatenation)
+	if bRemainder:
+		params[-2] = (params[-2][0], params[-1][1]);
  
 	for i in range(1, size):
 		#print "SENDING WORK" + str(i);
@@ -268,16 +272,22 @@ def allocWorkMotifCorrel():
  
 	motifCount = 256;
 	chunkMotifs = motifCount / (size - 1);
-	pprint("Number of motifs =".format(motifCount));
+	bRemainder = (motifCount % (size - 1) != 0);
+	pprint("Number of motifs = {}".format(motifCount));
 	pprint("allocating {} motifs per worker process".format(chunkMotifs));
 	params = chunkRanges(0, motifCount, chunkMotifs);
  
+    # If any remainder chunk, add them to last hosts job (by concatenation)
+    if bRemainder:
+		params[-2] = (params[-2][0], params[-1][1]);
+
 	for i in range(1, size):
 		#print "SENDING WORK" + str(i);
 		#print params;
 		sendWork(i, tasks.MOTIFCORREL, params[i - 1]);	  
- 
- 
+ 		print "work {}".format(params[i -1]);
+ 	print "work {}".format(params);
+
  
 #//------------------------------------------------------------------------------
 # Hercules RNA-Seq analysis functions
@@ -791,7 +801,7 @@ def doReporting():
 	lstHTMLReport.append("</table>");
 
   # Correlation vs Motif GC Box Plot
-	lstHTMLReport.append("<h2>Correlations as a function of GC content ({stat})</h2>".format(stat=CORREL_STAT_STR));
+	lstHTMLReport.append("<h2>Correlations as a function of GC content</h2>");
 	lstHTMLReport.append("<img src='All-correls.png'>");
 
  
@@ -965,7 +975,6 @@ if rank <> 0:
 	lstGTF_chr = [];
 	bWorkerRetired = False;
  
- 
 	while not bWorkerRetired:
  
 		data = comm.recv(source=0, tag=MPI.ANY_TAG, status=status);
@@ -999,7 +1008,11 @@ if rank <> 0:
 				fourmerChunk = workParams;
  
 				startFourmer = fourmerChunk[0];
-				endFourmer = fourmerChunk[1] + 1;
+				if (fourmerChunk[1] == 256):
+                                        endFourmer = 256;
+                                else:
+                                        endFourmer = fourmerChunk[1] - 1;
+
  
 				pprint("Compute quartiles (Q1) for batch, worker: {}".format(rank));
 				pprint("Compute quartiles (Q1), chunk: {}".format(workParams));
@@ -1029,7 +1042,11 @@ if rank <> 0:
 				fourmerChunk = workParams;
  
 				startFourmer = fourmerChunk[0];
-				endFourmer = fourmerChunk[1] + 1;
+
+				if (fourmerChunk[1] == 256):
+					endFourmer = 256;
+				else:
+					endFourmer = fourmerChunk[1] - 1;
  
 				pprint("Compute Correlations for batch, worker: {}".format(rank));
 				pprint("Compute Correlations, chunk: {}".format(workParams));
