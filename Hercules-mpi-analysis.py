@@ -253,14 +253,13 @@ def allocWork1Q():
 	pprint("allocating {} motifs per worker process".format(chunkMotifs));
 	params = chunkRanges(0, motifCount, chunkMotifs);
 
-    # If any remainder chunk, add them to last hosts job (by concatenation)
 	if bRemainder:
 		params[-2] = (params[-2][0], params[-1][1]);
  
 	for i in range(1, size):
 		#print "SENDING WORK" + str(i);
 		#print params;
-		sendWork(i, tasks.Q1, params[i - 1]);	   
+		sendWork(i, tasks.Q1, params[i - 1]);a	   
  
  
  
@@ -277,8 +276,7 @@ def allocWorkMotifCorrel():
 	pprint("allocating {} motifs per worker process".format(chunkMotifs));
 	params = chunkRanges(0, motifCount, chunkMotifs);
  
-    # If any remainder chunk, add them to last hosts job (by concatenation)
-    if bRemainder:
+        if bRemainder:
 		params[-2] = (params[-2][0], params[-1][1]);
 
 	for i in range(1, size):
@@ -286,7 +284,6 @@ def allocWorkMotifCorrel():
 		#print params;
 		sendWork(i, tasks.MOTIFCORREL, params[i - 1]);	  
  		print "work {}".format(params[i -1]);
- 	print "work {}".format(params);
 
  
 #//------------------------------------------------------------------------------
@@ -954,7 +951,7 @@ if rank == 0:
 	doReporting();
  
 	# Clear files we're done with
-	os.popen("rm -f " + CONF_LFS_WORKING_ + "*.q1");
+	# os.popen("rm -f " + CONF_LFS_WORKING_ + "*.q1");
 
  
  
@@ -1011,7 +1008,7 @@ if rank <> 0:
 				if (fourmerChunk[1] == 256):
                                         endFourmer = 256;
                                 else:
-                                        endFourmer = fourmerChunk[1] - 1;
+                                        endFourmer = fourmerChunk[1];
 
  
 				pprint("Compute quartiles (Q1) for batch, worker: {}".format(rank));
@@ -1046,7 +1043,7 @@ if rank <> 0:
 				if (fourmerChunk[1] == 256):
 					endFourmer = 256;
 				else:
-					endFourmer = fourmerChunk[1] - 1;
+					endFourmer = fourmerChunk[1];
  
 				pprint("Compute Correlations for batch, worker: {}".format(rank));
 				pprint("Compute Correlations, chunk: {}".format(workParams));
